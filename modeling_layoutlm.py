@@ -1,4 +1,5 @@
 import torch
+import json
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
 from transformers import BertPreTrainedModel
@@ -11,17 +12,18 @@ from transformers import BertPreTrainedModel
 from transformers.models.bert.modeling_bert import (
     BertEncoder,
     BertPooler,
-    BertLayerNorm,
+    # LayerNorm,
 )
+
+BertLayerNorm = torch.nn.LayerNorm
 
 
 class LayoutLMEmbeddings(nn.Module):
-    """Construct the embeddings from word, position and token_type embeddings.
-    """
+    """Construct the embeddings from word, position and token_type embeddings."""
 
     def __init__(self, config):
         super(LayoutLMEmbeddings, self).__init__()
-        #print("Word Embedding",config.vocab_size, config.hidden_size)
+        # print("Word Embedding",config.vocab_size, config.hidden_size)
         self.word_embeddings = nn.Embedding(
             config.vocab_size, config.hidden_size, padding_idx=0
         )
@@ -50,7 +52,11 @@ class LayoutLMEmbeddings(nn.Module):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(
-        self, input_ids, bbox, token_type_ids=None, position_ids=None,
+        self,
+        input_ids,
+        bbox,
+        token_type_ids=None,
+        position_ids=None,
     ):
         seq_length = input_ids.size(1)
         if position_ids is None:
@@ -63,6 +69,7 @@ class LayoutLMEmbeddings(nn.Module):
 
         words_embeddings = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
+
         left_position_embeddings = self.x_position_embeddings(bbox[:, :, 0])
         upper_position_embeddings = self.y_position_embeddings(bbox[:, :, 1])
         right_position_embeddings = self.x_position_embeddings(bbox[:, :, 2])
@@ -74,7 +81,7 @@ class LayoutLMEmbeddings(nn.Module):
             bbox[:, :, 2] - bbox[:, :, 0]
         )
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
-        #import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         embeddings = (
             words_embeddings
             + position_embeddings
@@ -86,12 +93,12 @@ class LayoutLMEmbeddings(nn.Module):
             + w_position_embeddings
             + token_type_embeddings
         )
-        #print("Before lYERNORMEmbeddings[i].shape")
-        #for emb in embeddings:
+        # print("Before lYERNORMEmbeddings[i].shape")
+        # for emb in embeddings:
         #    print(emb.shape)
         embeddings = self.LayerNorm(embeddings)
-        #print("Embeddings[i].shape")
-        #for emb in embeddings:
+        # print("Embeddings[i].shape")
+        # for emb in embeddings:
         #    print(emb.shape)
         embeddings = self.dropout(embeddings)
         return embeddings
@@ -135,9 +142,9 @@ class LayoutLMModel(BertPreTrainedModel):
         return self.embeddings.word_embeddings
 
     def _prune_heads(self, heads_to_prune):
-        """ Prunes heads of the model.
-            heads_to_prune: dict of {layer_num: list of heads to prune in this layer}
-            See base class PreTrainedModel
+        """Prunes heads of the model.
+        heads_to_prune: dict of {layer_num: list of heads to prune in this layer}
+        See base class PreTrainedModel
         """
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
@@ -200,23 +207,26 @@ class LayoutLMModel(BertPreTrainedModel):
             head_mask = [None] * self.config.num_hidden_layers
 
         embedding_output = self.embeddings(
-            input_ids, bbox, position_ids=position_ids, token_type_ids=token_type_ids,
+            input_ids,
+            bbox,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
         )
-        #print("embedding_output",embedding_output.shape)
+        # print("embedding_output",embedding_output.shape)
         encoder_outputs = self.encoder(
             embedding_output, extended_attention_mask, head_mask=head_mask
         )
-        #print("encoder_outputs")
-        #print([x.shape for x in encoder_outputs])
+        # print("encoder_outputs")
+        # print([x.shape for x in encoder_outputs])
         sequence_output = encoder_outputs[0]
         pooled_output = self.pooler(sequence_output)
-        #print("sequence_output=encoder_outputs[0]",sequence_output.shape)
-        #print("pooled_output",pooled_output.shape)
-        #print("encoder_outputs",encoder_outputs)
+        # print("sequence_output=encoder_outputs[0]",sequence_output.shape)
+        # print("pooled_output",pooled_output.shape)
+        # print("encoder_outputs",encoder_outputs)
         outputs = (sequence_output, pooled_output) + encoder_outputs[
             1:
         ]  # add hidden_states and attentions if they are here
-        #print("Final outputs",outputs[0].shape,outputs[1].shape)
+        # print("Final outputs",outputs[0].shape,outputs[1].shape)
         return outputs  # sequence_output, pooled_output, (hidden_states), (attentions)
 
 
@@ -262,9 +272,8 @@ class LayoutLMForTokenClassification(BertPreTrainedModel):
         start_positions=None,
         end_positions=None,
     ):
-
-        #print("Input IDs",input_ids.shape)
-        #print("BBox",bbox.shape)
+        # print("Input IDs",input_ids.shape)
+        # print("BBox",bbox.shape)
         outputs = self.bert(
             input_ids=input_ids,
             bbox=bbox,
@@ -273,7 +282,7 @@ class LayoutLMForTokenClassification(BertPreTrainedModel):
             position_ids=position_ids,
             head_mask=head_mask,
         )
-        #print("LayoutLMModel Model Output:",outputs[0].shape,)
+        # print("LayoutLMModel Model Output:",outputs[0].shape,)
         sequence_output = outputs[0]
         sequence_output = self.dropout(sequence_output)
         logits = self.classifier(sequence_output)
@@ -281,7 +290,10 @@ class LayoutLMForTokenClassification(BertPreTrainedModel):
         start_logits, end_logits = logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1)
         end_logits = end_logits.squeeze(-1)
-        outputs = (start_logits, end_logits,) + outputs[2:]
+        outputs = (
+            start_logits,
+            end_logits,
+        ) + outputs[2:]
 
         if start_positions is not None and end_positions is not None:
             # If we are on multi-GPU, split add a dimension
@@ -299,7 +311,7 @@ class LayoutLMForTokenClassification(BertPreTrainedModel):
             end_loss = loss_fct(end_logits, end_positions)
             total_loss = (start_loss + end_loss) / 2
             outputs = (total_loss,) + outputs
-        '''
+        """
         #print("logits= self.classifier(sequence_output)",logits.shape)
         outputs = (logits,) + outputs[
             2:
@@ -319,7 +331,7 @@ class LayoutLMForTokenClassification(BertPreTrainedModel):
             else:
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
             outputs = (loss,) + outputs
-        '''
+        """
         return outputs  # (loss), scores, (hidden_states), (attentions)
 
 
@@ -367,7 +379,6 @@ class LayoutLMForSequenceClassification(BertPreTrainedModel):
         inputs_embeds=None,
         labels=None,
     ):
-
         outputs = self.bert(
             input_ids=input_ids,
             bbox=bbox,
@@ -378,10 +389,10 @@ class LayoutLMForSequenceClassification(BertPreTrainedModel):
         )
 
         pooled_output = outputs[1]
-        print("pooled_output",pooled_output.shape)
+        print("pooled_output", pooled_output.shape)
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
-        print("logits",logits.shape)
+        print("logits", logits.shape)
         outputs = (logits,) + outputs[
             2:
         ]  # add hidden states and attention if they are here

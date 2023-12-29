@@ -1,18 +1,3 @@
-# coding=utf-8
-# Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
-# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """ Fine-tuning the library models for named entity recognition on CoNLL-2003 (Bert or Roberta). """
 
 from __future__ import absolute_import, division, print_function
@@ -23,7 +8,7 @@ import logging
 import os
 import shutil
 import random
-import json 
+import json
 import timeit
 
 import numpy as np
@@ -34,10 +19,9 @@ from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
-from utils_docvqa import (
-    read_docvqa_examples,
-    convert_examples_to_features)
+from utils_docvqa import read_docvqa_examples, convert_examples_to_features
 import sys
+
 # from modeling_layoutlm import LayoutLMForTokenClassification
 from transformers import AutoTokenizer, LayoutLMForTokenClassification
 from transformers import AdamW, get_linear_schedule_with_warmup
@@ -58,10 +42,13 @@ from transformers.data.metrics.squad_metrics import (
     compute_predictions_logits,
     squad_evaluate,
 )
-from transformers.data.processors.squad import SquadResult, SquadV1Processor, SquadV2Processor
+from transformers.data.processors.squad import (
+    SquadResult,
+    SquadV1Processor,
+    SquadV2Processor,
+)
 
 logger = logging.getLogger(__name__)
-
 
 
 MODEL_CLASSES = {
@@ -78,7 +65,7 @@ def set_seed(args):
 
 
 def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
-    """ Train the model """
+    """Train the model"""
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter()
 
@@ -192,7 +179,7 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
                 "start_positions": batch[3],
-                "end_positions":batch[4],
+                "end_positions": batch[4],
             }
 
             if args.model_type == "layoutlm":
@@ -205,7 +192,7 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                 )  # XLM and RoBERTa don"t use segment_ids
             outputs = model(**inputs)
             loss = outputs[0]
-             # model outputs are always tuple in pytorch-transformers (see doc)
+            # model outputs are always tuple in pytorch-transformers (see doc)
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -293,10 +280,13 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
 
     return global_step, tr_loss / global_step
 
+
 def to_list(tensor):
     return tensor.detach().cpu().tolist()
+
+
 def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""):
-    eval_dataset,features, examples = load_and_cache_examples(
+    eval_dataset, features, examples = load_and_cache_examples(
         args, tokenizer, labels, pad_token_label_id, mode=mode
     )
 
@@ -325,14 +315,14 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         batch = tuple(t.to(args.device) for t in batch)
         with torch.no_grad():
-                inputs = {
-                    "input_ids": batch[0],
-                    "attention_mask": batch[1],
-                }
-                inputs["bbox"] = batch[5]
-                inputs["token_type_ids"] = (batch[6])
-                outputs = model(**inputs)
-                example_indices = batch[7]
+            inputs = {
+                "input_ids": batch[0],
+                "attention_mask": batch[1],
+            }
+            inputs["bbox"] = batch[5]
+            inputs["token_type_ids"] = batch[6]
+            outputs = model(**inputs)
+            example_indices = batch[7]
         for i, example_index in enumerate(example_indices):
             eval_feature = features[example_index.item()]
             unique_id = int(eval_feature.unique_id)
@@ -343,16 +333,26 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
             result = SquadResult(unique_id, start_logits, end_logits)
             all_results.append(result)
     evalTime = timeit.default_timer() - start_time
-    logger.info("  Evaluation done in total %f secs (%f sec per example)", evalTime, evalTime / len(eval_dataset))
-    output_prediction_file = os.path.join(args.output_dir, "predictions_{}.json".format(prefix))
-    output_nbest_file = os.path.join(args.output_dir, "nbest_predictions_{}.json".format(prefix))
-    output_null_log_odds_file = os.path.join(args.output_dir, "null_odds_{}.json".format(prefix))
+    logger.info(
+        "  Evaluation done in total %f secs (%f sec per example)",
+        evalTime,
+        evalTime / len(eval_dataset),
+    )
+    output_prediction_file = os.path.join(
+        args.output_dir, "predictions_{}.json".format(prefix)
+    )
+    output_nbest_file = os.path.join(
+        args.output_dir, "nbest_predictions_{}.json".format(prefix)
+    )
+    output_null_log_odds_file = os.path.join(
+        args.output_dir, "null_odds_{}.json".format(prefix)
+    )
     predictions = compute_predictions_logits(
         examples,
         features,
         all_results,
-        20, 
-        30, 
+        20,
+        30,
         args.do_lower_case,
         output_prediction_file,
         output_nbest_file,
@@ -367,6 +367,7 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
     results = squad_evaluate(examples, predictions)
     return results
 
+
 def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
     if args.local_rank not in [-1, 0] and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
@@ -380,22 +381,36 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
             str(args.max_seq_length),
         ),
     )
-    if mode == 'train':
-        train_examples = read_docvqa_examples(args.train_json,is_training=True,skip_match_answers=args.skip_match_answers)
+    if mode == "train":
+        train_examples = read_docvqa_examples(
+            args.train_json,
+            is_training=True,
+            skip_match_answers=args.skip_match_answers,
+        )
         logger.info("Loading train json from %s", args.train_json)
     else:
-        train_examples = read_docvqa_examples(args.val_json,is_training=True,skip_match_answers=args.skip_match_answers)
+        train_examples = read_docvqa_examples(
+            args.val_json, is_training=True, skip_match_answers=args.skip_match_answers
+        )
         logger.info("Loading val json from %s", args.val_json)
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
         logger.info("Loading features from cached file %s", cached_features_file)
         features = torch.load(cached_features_file)
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
-        if mode == 'train':
-            train_examples = read_docvqa_examples(args.train_json,is_training=True,skip_match_answers=args.skip_match_answers)
+        if mode == "train":
+            train_examples = read_docvqa_examples(
+                args.train_json,
+                is_training=True,
+                skip_match_answers=args.skip_match_answers,
+            )
 
         else:
-            train_examples = read_docvqa_examples(args.val_json,is_training=True,skip_match_answers=args.skip_match_answers)
+            train_examples = read_docvqa_examples(
+                args.val_json,
+                is_training=True,
+                skip_match_answers=args.skip_match_answers,
+            )
         max_query_length = 64
         doc_stride = args.doc_stride
         features = convert_examples_to_features(
@@ -406,12 +421,13 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
             doc_stride=doc_stride,
             max_query_length=max_query_length,
             is_training=True,
-            pad_token_label_id=pad_token_label_id)    
-        print("Features generated",mode)
+            pad_token_label_id=pad_token_label_id,
+        )
+        print("Features generated", mode)
         if args.local_rank in [-1, 0]:
             logger.info("Saving features into cached file %s", cached_features_file)
             torch.save(features, cached_features_file)
-    
+
     if args.local_rank == 0 and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
 
@@ -420,12 +436,23 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
     all_bboxes = torch.tensor([f.boxes for f in features], dtype=torch.long)
-    all_start_positions = torch.tensor([f.start_positions for f in features], dtype=torch.long) 
-    all_end_positions = torch.tensor([f.end_positions for f in features], dtype=torch.long)
+    all_start_positions = torch.tensor(
+        [f.start_positions for f in features], dtype=torch.long
+    )
+    all_end_positions = torch.tensor(
+        [f.end_positions for f in features], dtype=torch.long
+    )
     all_p_mask = torch.tensor([f.p_mask for f in features], dtype=torch.long)
     all_example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
     dataset = TensorDataset(
-        all_input_ids, all_input_mask, all_segment_ids, all_start_positions, all_end_positions, all_bboxes, all_p_mask,all_example_index
+        all_input_ids,
+        all_input_mask,
+        all_segment_ids,
+        all_start_positions,
+        all_end_positions,
+        all_bboxes,
+        all_p_mask,
+        all_example_index,
     )
     return dataset, features, train_examples
 
@@ -621,12 +648,8 @@ def main():
     parser.add_argument(
         "--server_port", type=str, default="", help="For distant debugging."
     )
-    parser.add_argument(
-        "--train_json", type=str
-    )
-    parser.add_argument(
-        "--val_json", type=str
-    )
+    parser.add_argument("--train_json", type=str)
+    parser.add_argument("--val_json", type=str)
     parser.add_argument(
         "--skip_match_answers",
         action="store_true",
@@ -695,7 +718,7 @@ def main():
     set_seed(args)
 
     # Prepare CONLL-2003 task
-    labels = ["start","end"]
+    labels = ["start", "end"]
     num_labels = len(labels)
     # Use cross entropy ignore index as padding label id so that only real label ids contribute to the loss later
     pad_token_label_id = CrossEntropyLoss().ignore_index
@@ -705,10 +728,10 @@ def main():
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
     args.model_type = args.model_type.lower()
-    print("ARGS",args)
+    print("ARGS", args)
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
-    print("Config_name",args.config_name)
-    
+    print("Config_name", args.config_name)
+
     config = config_class.from_pretrained(
         args.config_name if args.config_name else args.model_name_or_path,
         num_labels=num_labels,
@@ -735,10 +758,10 @@ def main():
 
     # Training
     if args.do_train:
-        print("tokenizer",tokenizer)
-        print("pad_token_label_id",pad_token_label_id)
-        print("labels",labels) 
-        train_dataset,_,_ = load_and_cache_examples(
+        print("tokenizer", tokenizer)
+        print("pad_token_label_id", pad_token_label_id)
+        print("labels", labels)
+        train_dataset, _, _ = load_and_cache_examples(
             args, tokenizer, labels, pad_token_label_id, mode="train"
         )
         global_step, tr_loss = train(
@@ -767,7 +790,7 @@ def main():
     results = {}
     if args.do_eval and args.local_rank in [-1, 0]:
         tokenizer = tokenizer_class.from_pretrained(
-            'data_docvqa_train_test', do_lower_case=args.do_lower_case
+            "data_docvqa_train_test", do_lower_case=args.do_lower_case
         )
         checkpoints = [args.output_dir]
         if args.eval_all_checkpoints:
@@ -811,8 +834,8 @@ def main():
         result, predictions = evaluate(
             args, model, tokenizer, labels, pad_token_label_id, mode="test"
         )
-        with open('./tmp.json','w') as fp:
-            json.dump(predictions,fp)
+        with open("./tmp.json", "w") as fp:
+            json.dump(predictions, fp)
         # Save results
         output_test_results_file = os.path.join(args.output_dir, "test_results.txt")
         with open(output_test_results_file, "w") as writer:
