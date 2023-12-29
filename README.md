@@ -36,6 +36,17 @@
     ```
 
 4. Download the data through this:
+    Go to https://rrc.cvc.uab.es/?ch=17 
+    and download all zip files of : 
+    
+    Task 1 - Single Page Document Visual Question Answering
+
+    - Annotations (questions, answers, question types...)
+    - Images
+    - OCR (Microsoft OCR)
+    - IMDBs (processed dataset for MP-DocVQA framework)
+
+    upzip them like in the next step mentioned.
 
 5. Put it in like this:
     ```
