@@ -5,21 +5,19 @@
 1. Clone this repo:
 
    ```bash
-   git clone <>
+   git clone https://github.com/jaimin001/question-answering-document-images
    ```
 
 2. Make virtual environment:
 
-   ** check if you alias as python3/python **
-
    ```bash
-   python/python3 -m venv venv
+   python3 -m venv venv
    ```
 
    Then install dependencies:
 
    ```bash
-   pip/pip3 install -r requirements.txt
+   pip3 install -r requirements.txt
    ```
 
 3. Activate the virtual environment:
@@ -86,3 +84,9 @@
    ```bash
    bash run.sh
    ```
+
+## Test for custom image:
+
+    - To use this codebase for custom images, we have used `tesseract` OCR tool.
+    - Ensure the tesseract is installed in your system.
+    - for more info, refer https://tesseract-ocr.github.io/tessdoc/
